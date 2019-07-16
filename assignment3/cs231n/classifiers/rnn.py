@@ -142,8 +142,34 @@ class CaptioningRNN(object):
         ############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        
+        h0 , cache_affine = affine_forward( features, W_proj, b_proj)
+        x , cache_embed = word_embedding_forward( captions_in , W_embed)
+        
+        if self.cell_type=='rnn':
+            h, cache_hidden = rnn_forward(x, h0, Wx, Wh, b)
+        if self.cell_type=='lstm':
+            h, cache_hidden = lstm_forward(x, h0, Wx, Wh, b)
+        
+        scores, cache_temp_affine = temporal_affine_forward(h, W_vocab, b_vocab)
+        
+        loss , dscores = temporal_softmax_loss(scores, captions_out, mask, verbose=False)
+        
+        
+        #Backprop
+        
+        dh, grads["W_vocab"], grads["b_vocab"] = temporal_affine_backward(dscores, cache_temp_affine)
+        
+        if self.cell_type=='rnn':
+            dx, dh0, grads["Wx"], grads["Wh"], grads["b"] = rnn_backward(dh, cache_hidden)
+        if self.cell_type=='lstm':
+            dx, dh0, grads["Wx"], grads["Wh"], grads["b"] = lstm_backward(dh, cache_hidden)
+        
+        grads["W_embed"] = word_embedding_backward(dx, cache_embed)
+        _, grads["W_proj"], grads["b_proj"] = affine_backward(dh0, cache_affine)
+        
 
+        
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
         #                             END OF YOUR CODE                             #
@@ -211,7 +237,25 @@ class CaptioningRNN(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+
+        for i in range(max_length):
+            if i==0:
+                h0, _ = affine_forward( features, W_proj, b_proj)
+                x , _ = word_embedding_forward( self._start*np.ones( (N,1), dtype = int) , W_embed)
+                if self.cell_type=='rnn':
+                    h, _ = rnn_forward(x, h0, Wx, Wh, b)
+                else:
+                    h, _ = lstm_forward(x, h0, Wx, Wh, b)
+            else:
+                x , _ = word_embedding_forward( highest.reshape((N,1)) , W_embed)
+                if self.cell_type=='rnn':
+                    h, _ = rnn_forward(x, h.squeeze(axis = 1), Wx, Wh, b)
+                else:
+                    h, _ = lstm_forward(x, h.squeeze(axis = 1), Wx, Wh, b)
+            
+            scores, _ = temporal_affine_forward(h, W_vocab, b_vocab)
+            highest = np.argmax( scores.squeeze(axis = 1) , axis =1 )
+            captions[:,0] = highest
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
